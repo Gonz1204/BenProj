@@ -1,329 +1,291 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import UploadZone from '@/components/UploadZone'
 import VoicePicker from '@/components/VoicePicker'
 import StatusBar from '@/components/StatusBar'
 import ResultCard from '@/components/ResultCard'
+import type { DebateLine } from '@/app/api/generate/route'
 
-type AppStatus = 'idle' | 'extracting' | 'converting' | 'done' | 'error'
+interface ImageItem {
+  base64: string
+  mimeType: string
+  previewUrl: string
+}
+
+type AppStatus = 'idle' | 'uploading' | 'extracting' | 'converting' | 'stitching' | 'done' | 'error'
 
 export default function HomePage() {
-  const [image, setImage] = useState<string | null>(null)
-  const [mimeType, setMimeType] = useState<string>('image/jpeg')
-  const [selectedVoice, setSelectedVoice] = useState<string>('onyx')
+  const [images, setImages] = useState<ImageItem[]>([])
+  const [host1Voice, setHost1Voice] = useState<string | null>(null)
+  const [host2Voice, setHost2Voice] = useState<string | null>(null)
   const [status, setStatus] = useState<AppStatus>('idle')
-  const [audioUrl, setAudioUrl] = useState<string | null>(null)
-  const [topic, setTopic] = useState<string>('lecture')
-  const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined)
+  const [errorMessage, setErrorMessage] = useState<string>('')
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
+  const [topic, setTopic] = useState<string>('History_Debate')
 
-  const resultRef = useRef<HTMLDivElement>(null)
+  const isLoading =
+    status === 'uploading' ||
+    status === 'extracting' ||
+    status === 'converting' ||
+    status === 'stitching'
 
-  const handleImageSelected = useCallback((base64: string, mime: string) => {
-    setImage(base64)
-    setMimeType(mime)
-    // Reset result state if user re-uploads
-    if (audioUrl) {
-      URL.revokeObjectURL(audioUrl)
-      setAudioUrl(null)
-    }
-    setStatus('idle')
-    setErrorMessage(undefined)
-  }, [audioUrl])
+  const sameVoice = host1Voice && host2Voice && host1Voice === host2Voice
+
+  const canGenerate =
+    images.length > 0 &&
+    host1Voice !== null &&
+    host2Voice !== null &&
+    !sameVoice &&
+    !isLoading
+
+  const getHelperText = () => {
+    if (images.length === 0) return 'Upload at least one photo to continue'
+    if (!host1Voice || !host2Voice) return 'Pick a voice for both hosts to continue'
+    if (sameVoice) return 'Pick two different voices to continue'
+    return ''
+  }
 
   const handleGenerate = useCallback(async () => {
-    if (!image) return
-    if (status === 'extracting' || status === 'converting') return
+    if (!canGenerate) return
 
-    // Revoke old audio URL if exists
-    if (audioUrl) {
-      URL.revokeObjectURL(audioUrl)
-      setAudioUrl(null)
-    }
-
-    setErrorMessage(undefined)
-    setStatus('extracting')
+    setErrorMessage('')
+    setAudioBlob(null)
 
     try {
-      // Step 1: Extract script from image
+      setStatus('extracting')
+
       const generateRes = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image, mimeType }),
+        body: JSON.stringify({
+          images: images.map((i) => i.base64),
+          mimeTypes: images.map((i) => i.mimeType),
+        }),
       })
 
       if (!generateRes.ok) {
-        const errorData = await generateRes.json().catch(() => ({}))
-        throw new Error(
-          (errorData as { error?: string }).error ||
-            `Script generation failed (${generateRes.status})`
-        )
+        const data = await generateRes.json().catch(() => ({})) as { error?: string }
+        throw new Error(data.error ?? `Script generation failed (${generateRes.status})`)
       }
 
-      const generateData = await generateRes.json() as { script: string; topic: string }
-      const { script, topic: rawTopic } = generateData
-
-      if (!script) {
-        throw new Error('No script was returned. Please try again.')
+      const { script, topic: rawTopic } = await generateRes.json() as {
+        script: DebateLine[]
+        topic: string
       }
 
-      setTopic(rawTopic || 'lecture')
+      if (!script || script.length === 0) {
+        throw new Error('No script returned — please try again')
+      }
+
+      setTopic(rawTopic || 'History_Debate')
       setStatus('converting')
 
-      // Step 2: Convert script to audio
       const ttsRes = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ script, voice: selectedVoice }),
+        body: JSON.stringify({
+          lines: script,
+          voice1Id: host1Voice,
+          voice2Id: host2Voice,
+        }),
       })
 
       if (!ttsRes.ok) {
-        const errorData = await ttsRes.json().catch(() => ({}))
-        throw new Error(
-          (errorData as { error?: string }).error ||
-            `Audio conversion failed (${ttsRes.status})`
-        )
+        const data = await ttsRes.json().catch(() => ({})) as { error?: string }
+        throw new Error(data.error ?? `Audio generation failed (${ttsRes.status})`)
       }
 
-      const audioBlob = await ttsRes.blob()
-      const url = URL.createObjectURL(audioBlob)
-      setAudioUrl(url)
+      const blob = await ttsRes.blob()
+      setAudioBlob(blob)
       setStatus('done')
-
-      // Move focus to result card
-      setTimeout(() => {
-        resultRef.current?.focus()
-        resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 100)
     } catch (err: unknown) {
       console.error('Generate error:', err)
-      const message =
-        err instanceof Error
-          ? err.message
-          : 'Something went wrong. Please try again.'
+      const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.'
       setErrorMessage(message)
       setStatus('error')
     }
-  }, [image, mimeType, selectedVoice, status, audioUrl])
+  }, [canGenerate, images, host1Voice, host2Voice])
 
   const handleReset = useCallback(() => {
-    if (audioUrl) {
-      URL.revokeObjectURL(audioUrl)
-    }
-    setImage(null)
-    setMimeType('image/jpeg')
-    setSelectedVoice('onyx')
+    setImages([])
+    setAudioBlob(null)
+    setTopic('History_Debate')
     setStatus('idle')
-    setAudioUrl(null)
-    setTopic('lecture')
-    setErrorMessage(undefined)
-    // Scroll back to top
+    setErrorMessage('')
     window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [audioUrl])
+  }, [])
 
-  const isLoading = status === 'extracting' || status === 'converting'
+  const helperText = getHelperText()
 
   return (
     <main
       style={{
         minHeight: '100vh',
         backgroundColor: '#0A0A0A',
-        paddingBottom: '60px',
+        paddingBottom: '80px',
       }}
     >
       <div
         style={{
-          maxWidth: '600px',
+          maxWidth: '640px',
           margin: '0 auto',
           paddingLeft: '24px',
           paddingRight: '24px',
         }}
       >
         {/* Header */}
-        <header
-          style={{
-            paddingTop: '40px',
-            paddingBottom: '28px',
-            textAlign: 'center',
-          }}
-        >
+        <header style={{ paddingTop: '48px', paddingBottom: '28px' }}>
           <h1
             style={{
               color: '#FFFFFF',
-              fontSize: '32px',
+              fontSize: '36px',
               fontWeight: 700,
-              margin: '0 0 8px 0',
+              margin: '0 0 10px 0',
               lineHeight: 1.2,
-              letterSpacing: '-0.01em',
             }}
           >
-            📚 TEXTBOOK PODCAST
+            🎙 BENPODCAST
           </h1>
           <p
             style={{
               color: '#CCCCCC',
-              fontSize: '18px',
-              margin: 0,
-              lineHeight: 1.5,
+              fontSize: '20px',
+              margin: '0 0 20px 0',
+              lineHeight: 1.6,
             }}
           >
-            Upload a textbook photo and get an instant audio lecture.
+            Turn your textbook into a sports debate podcast.
           </p>
+          <div
+            style={{
+              width: '100%',
+              height: '2px',
+              backgroundColor: '#F5C518',
+            }}
+          />
         </header>
 
         {/* Status bar */}
         <StatusBar status={status} errorMessage={errorMessage} />
 
-        {/* Section 1: Upload */}
-        <section style={{ marginBottom: '32px' }}>
+        {/* Step 1 */}
+        <section style={{ marginBottom: '40px' }}>
           <h2
             style={{
-              color: '#FFFFFF',
-              fontSize: '24px',
+              color: '#F5C518',
+              fontSize: '28px',
               fontWeight: 700,
-              margin: '0 0 12px 0',
+              margin: '0 0 16px 0',
+              lineHeight: 1.3,
             }}
           >
-            1. Upload Your Photo
+            STEP 1 — UPLOAD YOUR PHOTOS
           </h2>
-          <UploadZone onImageSelected={handleImageSelected} />
+          <UploadZone images={images} onImagesChange={setImages} />
         </section>
 
-        {/* Section 2: Voice */}
-        <section style={{ marginBottom: '32px' }}>
+        {/* Step 2 */}
+        <section style={{ marginBottom: '40px' }}>
           <h2
             style={{
-              color: '#FFFFFF',
-              fontSize: '24px',
+              color: '#F5C518',
+              fontSize: '28px',
               fontWeight: 700,
-              margin: '0 0 12px 0',
+              margin: '0 0 16px 0',
+              lineHeight: 1.3,
             }}
           >
-            2. Pick a Voice
+            STEP 2 — PICK YOUR TWO HOSTS
           </h2>
           <VoicePicker
-            selectedVoice={selectedVoice}
-            onVoiceChange={setSelectedVoice}
+            host1Voice={host1Voice}
+            host2Voice={host2Voice}
+            onHost1Change={setHost1Voice}
+            onHost2Change={setHost2Voice}
           />
         </section>
 
-        {/* Section 3: Generate or Result */}
-        <section>
+        {/* Step 3 */}
+        <section style={{ marginBottom: '40px' }}>
           <h2
             style={{
-              color: '#FFFFFF',
-              fontSize: '24px',
+              color: '#F5C518',
+              fontSize: '28px',
               fontWeight: 700,
-              margin: '0 0 12px 0',
+              margin: '0 0 16px 0',
+              lineHeight: 1.3,
             }}
           >
-            3. Generate
+            STEP 3 — GENERATE
           </h2>
 
-          {status === 'done' && audioUrl ? (
-            <div
-              ref={resultRef}
-              tabIndex={-1}
-              style={{ outline: 'none' }}
-            >
-              <ResultCard
-                audioUrl={audioUrl}
-                topic={topic}
-                onReset={handleReset}
-              />
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={!image || isLoading}
-              className={!image || isLoading ? '' : 'btn-pulse'}
-              style={{
-                width: '100%',
-                minHeight: '60px',
-                backgroundColor:
-                  !image || isLoading ? '#444444' : '#F5C518',
-                color: !image || isLoading ? '#888888' : '#0A0A0A',
-                fontSize: '22px',
-                fontWeight: 700,
-                border: 'none',
-                borderRadius: '10px',
-                cursor: !image || isLoading ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '10px',
-                letterSpacing: '0.02em',
-                transition: 'background-color 0.15s, color 0.15s, transform 0.1s',
-              }}
-              onMouseOver={(e) => {
-                if (!(!image || isLoading)) {
-                  e.currentTarget.style.backgroundColor = '#d4a800'
-                }
-              }}
-              onMouseOut={(e) => {
-                if (!(!image || isLoading)) {
-                  e.currentTarget.style.backgroundColor = '#F5C518'
-                }
-              }}
-              onMouseDown={(e) => {
-                if (!(!image || isLoading)) {
-                  e.currentTarget.style.transform = 'scale(0.98)'
-                }
-              }}
-              onMouseUp={(e) => {
-                e.currentTarget.style.transform = 'scale(1)'
-              }}
-              aria-label={
-                !image
-                  ? 'Upload a photo first to generate a podcast'
-                  : isLoading
-                  ? 'Generating podcast, please wait...'
-                  : 'Generate my podcast'
-              }
-              aria-busy={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      animation: 'spin 1s linear infinite',
-                    }}
-                  >
-                    ⏳
-                  </span>
-                  {status === 'extracting'
-                    ? 'Reading your page...'
-                    : 'Creating audio...'}
-                </>
-              ) : (
-                <>🎙 GENERATE MY PODCAST</>
-              )}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={!canGenerate}
+            aria-busy={isLoading}
+            aria-label={
+              !canGenerate && !isLoading
+                ? helperText
+                : isLoading
+                ? 'Generating, please wait...'
+                : 'Generate your podcast'
+            }
+            style={{
+              width: '100%',
+              minHeight: '64px',
+              backgroundColor: canGenerate ? '#F5C518' : '#444444',
+              color: canGenerate ? '#0A0A0A' : '#888888',
+              fontSize: '22px',
+              fontWeight: 700,
+              border: 'none',
+              borderRadius: '10px',
+              cursor: canGenerate ? 'pointer' : 'not-allowed',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+              transition: 'background-color 0.15s, color 0.15s',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >
+            {isLoading ? (
+              <>
+                <span>⏳</span>
+                {status === 'extracting'
+                  ? 'Writing the script...'
+                  : 'Recording the hosts...'}
+              </>
+            ) : (
+              '🎙 GENERATE MY PODCAST'
+            )}
+          </button>
 
-          {!image && status === 'idle' && (
+          {!canGenerate && !isLoading && helperText && (
             <p
               style={{
                 color: '#CCCCCC',
-                fontSize: '16px',
+                fontSize: '18px',
                 textAlign: 'center',
-                marginTop: '10px',
+                marginTop: '12px',
+                lineHeight: 1.5,
               }}
             >
-              Upload a photo above to get started.
+              {helperText}
             </p>
           )}
         </section>
-      </div>
 
-      <style jsx>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+        {/* Result */}
+        {status === 'done' && audioBlob && (
+          <ResultCard
+            audioBlob={audioBlob}
+            topic={topic}
+            onReset={handleReset}
+          />
+        )}
+      </div>
     </main>
   )
 }

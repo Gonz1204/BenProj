@@ -1,47 +1,79 @@
 import { NextRequest, NextResponse } from 'next/server'
-import openai from '@/lib/openai'
-
-const VALID_VOICES = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'] as const
-type Voice = (typeof VALID_VOICES)[number]
+import { synthesizeSpeech } from '@/lib/elevenlabs'
+import type { DebateLine } from '@/app/api/generate/route'
 
 export async function POST(request: NextRequest) {
+  const apiKey = process.env.ELEVENLABS_API_KEY
+  if (!apiKey) {
+    return NextResponse.json({ error: 'ElevenLabs API key not configured' }, { status: 500 })
+  }
+
   try {
     const body = await request.json()
-    const { script, voice } = body as { script: string; voice: string }
 
-    if (!script || typeof script !== 'string') {
-      return NextResponse.json(
-        { error: 'Missing or invalid script in request body.' },
-        { status: 400 }
-      )
+    // Handle preview request
+    if (body.previewText && body.voiceId) {
+      const audioBuffer = await synthesizeSpeech(body.previewText, body.voiceId, apiKey)
+      return new NextResponse(audioBuffer, {
+        headers: {
+          'Content-Type': 'audio/mpeg',
+          'Cache-Control': 'no-cache',
+        },
+      })
     }
 
-    const safeVoice: Voice = VALID_VOICES.includes(voice as Voice)
-      ? (voice as Voice)
-      : 'onyx'
+    // Handle full script TTS
+    const { lines, voice1Id, voice2Id } = body as {
+      lines: DebateLine[]
+      voice1Id: string
+      voice2Id: string
+    }
 
-    const mp3Response = await openai.audio.speech.create({
-      model: 'tts-1',
-      voice: safeVoice,
-      input: script,
-      response_format: 'mp3',
-    })
+    if (!lines || !voice1Id || !voice2Id) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
 
-    // Get the raw binary data from the OpenAI response
-    const arrayBuffer = await mp3Response.arrayBuffer()
+    const audioBuffers: ArrayBuffer[] = []
 
-    return new NextResponse(arrayBuffer, {
-      status: 200,
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      const voiceId = line.host === 1 ? voice1Id : voice2Id
+
+      const buffer = await synthesizeSpeech(line.text, voiceId, apiKey)
+      audioBuffers.push(buffer)
+
+      // Small delay to respect rate limits
+      if (i < lines.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+    }
+
+    // Concatenate all audio buffers
+    const totalLength = audioBuffers.reduce((sum, buf) => sum + buf.byteLength, 0)
+    const combined = new Uint8Array(totalLength)
+    let offset = 0
+    for (const buf of audioBuffers) {
+      combined.set(new Uint8Array(buf), offset)
+      offset += buf.byteLength
+    }
+
+    return new NextResponse(combined.buffer, {
       headers: {
         'Content-Type': 'audio/mpeg',
-        'Content-Disposition': 'inline; filename="podcast.mp3"',
-        'Cache-Control': 'no-store',
+        'Cache-Control': 'no-cache',
+        'Content-Length': String(totalLength),
       },
     })
   } catch (error: unknown) {
-    console.error('[/api/tts] Error:', error)
-    const message =
-      error instanceof Error ? error.message : 'Unknown error occurred.'
-    return NextResponse.json({ error: message }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    console.error('TTS error:', message)
+
+    if (message.includes('401') || message.includes('api key')) {
+      return NextResponse.json({ error: '❌ ElevenLabs API key error' }, { status: 401 })
+    }
+    if (message.includes('429') || message.includes('quota')) {
+      return NextResponse.json({ error: '❌ ElevenLabs quota exceeded — upgrade your plan' }, { status: 429 })
+    }
+    return NextResponse.json({ error: `❌ Audio generation failed: ${message}` }, { status: 500 })
   }
 }

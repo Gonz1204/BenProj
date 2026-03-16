@@ -1,89 +1,53 @@
-# Textbook Podcast
+# BenPodcast — Textbook to Sports Debate
 
-Upload a textbook photo and get an AI-generated audio lecture powered by GPT-4o and OpenAI TTS.
+Upload photos of your textbook pages and get an AI-generated two-host sports debate podcast in the style of First Take / Undisputed. GPT-4o reads the images and writes a heated debate script; ElevenLabs voices each host separately; the audio is stitched and plays in-browser.
 
 ## Setup
 
-### Prerequisites
-- Node.js 18+
-- An OpenAI API key with access to GPT-4o and TTS
-
-### Installation
+### Install dependencies
 
 ```bash
-cd benPodcast
 npm install
 ```
 
-### Environment
+### Environment variables
 
-The `.env.local` file is already configured. If you need to change the API key:
+Create or edit `.env.local` in the project root:
 
 ```
-OPENAI_API_KEY=your_api_key_here
+OPENAI_API_KEY=your_openai_key_here
+ELEVENLABS_API_KEY=your_elevenlabs_key_here
 ```
 
-### Development
+- Get your OpenAI key: https://platform.openai.com/api-keys
+- Get your ElevenLabs key: https://elevenlabs.io (Creator plan recommended for longer podcasts)
+
+### Run in development
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-### Production Build
-
-```bash
-npm run build
-npm start
-```
+Open http://localhost:3000 in your browser.
 
 ## Deployment
 
-### Vercel (Recommended)
+### Vercel (recommended)
 
 1. Push this folder to a GitHub repository.
-2. Go to [vercel.com](https://vercel.com) and import the repository.
-3. In the Vercel project settings, add the environment variable:
-   - `OPENAI_API_KEY` = your OpenAI API key
-4. Deploy. Vercel will auto-detect Next.js.
+2. Connect the repo at vercel.com.
+3. Add both keys as Environment Variables in the Vercel project settings:
+   - `OPENAI_API_KEY`
+   - `ELEVENLABS_API_KEY`
+4. Deploy — Vercel auto-detects Next.js.
 
-### Netlify
+## iPhone tip
 
-1. Push to GitHub.
-2. Create a new site from Git on [netlify.com](https://netlify.com).
-3. Set build command: `npm run build`
-4. Set publish directory: `.next`
-5. Add environment variable `OPENAI_API_KEY` in Site settings > Environment.
-6. Install the Netlify Next.js plugin.
+After opening the app in Safari, tap the Share button and choose "Add to Home Screen" for a full-screen, app-like experience.
 
-### Self-hosted (VPS / Docker)
-
-```bash
-npm install
-npm run build
-npm start
-```
-
-Or with PM2:
-
-```bash
-npm install -g pm2
-npm run build
-pm2 start npm --name "textbook-podcast" -- start
-```
-
-## Features
-
-- Upload textbook photos (JPEG, PNG, HEIC from iPhone)
-- GPT-4o vision extracts and rewrites content as an AP lecture script
-- 6 OpenAI TTS voices to choose from with live preview
-- Audio plays in-browser with download option
-- Low-vision optimized UI (WCAG AAA contrast, 18px+ fonts, large tap targets)
-
-## Tech Stack
+## Tech stack
 
 - Next.js 14 (App Router)
-- OpenAI SDK (GPT-4o + TTS-1)
-- Tailwind CSS
-- TypeScript
+- OpenAI GPT-4o vision for script generation
+- ElevenLabs TTS for dual-voice audio
+- Tailwind CSS + TypeScript

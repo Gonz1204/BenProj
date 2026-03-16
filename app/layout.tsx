@@ -1,29 +1,10 @@
-import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
+import type { Metadata } from 'next'
 import './globals.css'
 
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-})
-
 export const metadata: Metadata = {
-  title: 'Textbook Podcast',
-  description: 'Upload a textbook photo and get an AI-generated audio lecture.',
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'black-translucent',
-    title: 'Textbook Podcast',
-  },
-}
-
-export const viewport: Viewport = {
-  width: 'device-width',
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  themeColor: '#0A0A0A',
+  title: 'BenPodcast — Textbook to Sports Debate',
+  description: 'Turn your textbook into a sports debate podcast',
+  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
 }
 
 export default function RootLayout({
@@ -32,16 +13,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={inter.variable}>
-      <body
-        style={{
-          backgroundColor: '#0A0A0A',
-          color: '#FFFFFF',
-          minHeight: '100vh',
-          margin: 0,
-          padding: 0,
-        }}
-      >
+    <html lang="en">
+      <body style={{ backgroundColor: '#0A0A0A', margin: 0, padding: 0 }}>
         {children}
       </body>
     </html>

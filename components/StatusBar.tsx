@@ -1,68 +1,61 @@
 'use client'
 
-type StatusType = 'idle' | 'extracting' | 'converting' | 'done' | 'error'
-
 interface StatusBarProps {
-  status: StatusType
+  status: 'idle' | 'uploading' | 'extracting' | 'converting' | 'stitching' | 'done' | 'error'
   errorMessage?: string
+  progress?: number // 0-100
 }
 
-const STATUS_CONFIG: Record<
-  StatusType,
-  { icon: string; message: string; color: string; showBar: boolean; barDone: boolean }
-> = {
-  idle: {
-    icon: '',
-    message: '',
-    color: '#CCCCCC',
-    showBar: false,
-    barDone: false,
-  },
-  extracting: {
-    icon: '🧠',
-    message: 'Reading your textbook page...',
-    color: '#F5C518',
-    showBar: true,
-    barDone: false,
-  },
-  converting: {
-    icon: '🎙',
-    message: 'Converting to audio...',
-    color: '#00D4FF',
-    showBar: true,
-    barDone: false,
-  },
-  done: {
-    icon: '✅',
-    message: 'Your podcast is ready!',
-    color: '#00FF88',
-    showBar: true,
-    barDone: true,
-  },
-  error: {
-    icon: '❌',
-    message: 'Error',
-    color: '#FF4444',
-    showBar: false,
-    barDone: false,
-  },
+const STATUS_MESSAGES: Record<string, string> = {
+  uploading: '📷 Got your photos — reading the content...',
+  extracting: '🧠 Writing your debate script...',
+  converting: '🎙 Recording the hosts...',
+  stitching: '🎬 Mixing the audio...',
+  done: '✅ Your podcast is ready!',
 }
 
-export default function StatusBar({ status, errorMessage }: StatusBarProps) {
-  const config = STATUS_CONFIG[status]
+const isActive = (status: string) =>
+  ['uploading', 'extracting', 'converting', 'stitching'].includes(status)
+
+export default function StatusBar({ status, errorMessage, progress }: StatusBarProps) {
+  const showBar = status !== 'idle'
+  const active = isActive(status)
+  const isDone = status === 'done'
+  const isError = status === 'error'
 
   return (
     <>
       {/* Fixed top progress bar */}
-      <div className="progress-bar-container">
-        {config.showBar && (
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '6px',
+          backgroundColor: '#1A1A2E',
+          zIndex: 9999,
+          overflow: 'hidden',
+        }}
+      >
+        {showBar && (
           <div
-            className={`progress-bar-fill ${config.barDone ? 'done' : 'animating'}`}
+            className={active ? 'progress-bar-animated' : undefined}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: isDone ? '0' : active ? '0' : '0',
+              height: '6px',
+              width: isDone ? '100%' : progress != null ? `${progress}%` : '40%',
+              backgroundColor: isDone ? '#00FF88' : '#F5C518',
+              borderRadius: '0 3px 3px 0',
+              transition: isDone ? 'width 0.4s ease' : undefined,
+            }}
           />
         )}
       </div>
 
-      {/* Status message — only rendered when not idle */}
+      {/* Status message */}
       {status !== 'idle' && (
         <div
           role="status"
@@ -71,26 +64,25 @@ export default function StatusBar({ status, errorMessage }: StatusBarProps) {
           style={{
             backgroundColor: '#1A1A2E',
             borderRadius: '10px',
-            padding: '14px 20px',
+            padding: '16px 20px',
+            marginBottom: '20px',
+            border: `2px solid ${isError ? '#FF4444' : isDone ? '#00FF88' : '#F5C518'}`,
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
-            border: `2px solid ${config.color}`,
-            marginBottom: '8px',
           }}
         >
-          <span style={{ fontSize: '22px', lineHeight: 1 }}>{config.icon}</span>
           <span
             style={{
               fontSize: '20px',
               fontWeight: 700,
-              color: config.color,
-              lineHeight: 1.3,
+              color: isError ? '#FF4444' : isDone ? '#00FF88' : '#F5C518',
+              lineHeight: 1.5,
             }}
           >
-            {status === 'error'
-              ? `${config.icon} ${errorMessage ?? 'Something went wrong. Please try again.'}`
-              : `${config.message}`}
+            {isError
+              ? `❌ ${errorMessage ?? 'Something went wrong. Please try again.'}`
+              : STATUS_MESSAGES[status] ?? ''}
           </span>
         </div>
       )}

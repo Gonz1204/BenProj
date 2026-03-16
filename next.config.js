@@ -1,9 +1,3 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: true,
-  experimental: {
-    serverComponentsExternalPackages: ['openai'],
-  },
-}
-
+const nextConfig = {}
 module.exports = nextConfig

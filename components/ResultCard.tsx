@@ -1,174 +1,162 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useRef, useEffect, useState } from 'react'
 
 interface ResultCardProps {
-  audioUrl: string
+  audioBlob: Blob | null
   topic: string
   onReset: () => void
 }
 
-export default function ResultCard({ audioUrl, topic, onReset }: ResultCardProps) {
-  const handleDownload = useCallback(() => {
-    const filename = `${topic || 'podcast'}.mp3`
+export default function ResultCard({ audioBlob, topic, onReset }: ResultCardProps) {
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [audioUrl, setAudioUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (audioBlob) {
+      const url = URL.createObjectURL(audioBlob)
+      setAudioUrl(url)
+      return () => URL.revokeObjectURL(url)
+    }
+  }, [audioBlob])
+
+  useEffect(() => {
+    if (cardRef.current) {
+      cardRef.current.focus()
+      cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [])
+
+  const handleSave = () => {
+    if (!audioBlob) return
+    const url = URL.createObjectURL(audioBlob)
     const a = document.createElement('a')
-    a.href = audioUrl
-    a.download = filename
+    a.href = url
+    a.download = `${topic}.mp3`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
-  }, [audioUrl, topic])
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
 
   return (
     <div
-      className="result-card-glow fade-in-up"
+      ref={cardRef}
+      tabIndex={-1}
       style={{
+        outline: 'none',
         backgroundColor: '#1A1A2E',
         borderRadius: '14px',
-        border: '2px solid #00FF88',
-        padding: '24px 20px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '20px',
+        padding: '28px 24px',
+        marginTop: '24px',
       }}
     >
-      {/* Title */}
       <h2
         style={{
           color: '#00FF88',
           fontSize: '28px',
           fontWeight: 700,
-          margin: 0,
-          lineHeight: 1.2,
+          margin: '0 0 20px 0',
+          lineHeight: 1.3,
+          textAlign: 'center',
         }}
       >
-        ✅ Your podcast is ready!
+        YOUR PODCAST IS READY!
       </h2>
 
       {/* Info box */}
       <div
         style={{
-          backgroundColor: 'rgba(0,255,136,0.08)',
-          border: '1px solid rgba(0,255,136,0.3)',
+          backgroundColor: '#0A0A0A',
+          border: '2px solid #F5C518',
           borderRadius: '10px',
-          padding: '16px 18px',
+          padding: '24px',
+          marginBottom: '24px',
         }}
       >
-        <p
-          style={{
-            color: '#FFFFFF',
-            fontSize: '22px',
-            margin: '0 0 10px 0',
-            lineHeight: 1.5,
-          }}
-        >
+        <p style={{ color: '#FFFFFF', fontSize: '22px', margin: '0 0 10px 0', lineHeight: 1.6 }}>
           ▶ It is playing now.
         </p>
-        <p
-          style={{
-            color: '#FFFFFF',
-            fontSize: '22px',
-            margin: '0 0 10px 0',
-            lineHeight: 1.5,
-          }}
-        >
+        <p style={{ color: '#FFFFFF', fontSize: '22px', margin: '0 0 10px 0', lineHeight: 1.6 }}>
           💾 Tap the button below to save the MP3 to your phone.
         </p>
-        <p
-          style={{
-            color: '#FFFFFF',
-            fontSize: '22px',
-            margin: 0,
-            lineHeight: 1.5,
-          }}
-        >
-          🔁 Drop a new photo to make another one.
+        <p style={{ color: '#FFFFFF', fontSize: '22px', margin: 0, lineHeight: 1.6 }}>
+          🔁 Drop new photos to make another one.
         </p>
       </div>
 
-      {/* Native audio player */}
-      <audio
-        // eslint-disable-next-line jsx-a11y/media-has-caption
-        controls
-        autoPlay
-        src={audioUrl}
-        style={{
-          width: '100%',
-          borderRadius: '10px',
-          minHeight: '54px',
-        }}
-        aria-label="Generated podcast audio"
-      />
+      {/* Audio player */}
+      {audioUrl && (
+        <audio
+          src={audioUrl}
+          controls
+          autoPlay
+          style={{ width: '100%', marginBottom: '20px' }}
+          aria-label="Podcast audio player"
+        />
+      )}
 
-      {/* Download button */}
+      {/* Save button */}
       <button
         type="button"
-        onClick={handleDownload}
+        onClick={handleSave}
+        disabled={!audioBlob}
         style={{
           width: '100%',
-          minHeight: '60px',
+          minHeight: '64px',
           backgroundColor: '#F5C518',
           color: '#0A0A0A',
           fontSize: '22px',
           fontWeight: 700,
           border: 'none',
           borderRadius: '10px',
-          cursor: 'pointer',
+          cursor: audioBlob ? 'pointer' : 'not-allowed',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           gap: '10px',
-          letterSpacing: '0.02em',
-          transition: 'background-color 0.15s, transform 0.1s',
+          marginBottom: '10px',
+          WebkitTapHighlightColor: 'transparent',
         }}
-        onMouseOver={(e) => {
-          e.currentTarget.style.backgroundColor = '#d4a800'
-        }}
-        onMouseOut={(e) => {
-          e.currentTarget.style.backgroundColor = '#F5C518'
-        }}
-        onMouseDown={(e) => {
-          e.currentTarget.style.transform = 'scale(0.98)'
-        }}
-        onMouseUp={(e) => {
-          e.currentTarget.style.transform = 'scale(1)'
-        }}
-        aria-label={`Save MP3 to your phone: ${topic}`}
       >
-        💾 SAVE MP3 TO YOUR PHONE
+        💾 SAVE TO YOUR PHONE
       </button>
 
-      {/* Make Another button */}
+      {/* Helper text */}
+      <p
+        style={{
+          color: '#CCCCCC',
+          fontSize: '16px',
+          textAlign: 'center',
+          margin: '0 0 20px 0',
+          lineHeight: 1.5,
+        }}
+      >
+        Tap Save, then choose Files to save to your phone
+      </p>
+
+      {/* Reset button */}
       <button
         type="button"
         onClick={onReset}
         style={{
           width: '100%',
-          minHeight: '60px',
-          backgroundColor: 'transparent',
-          color: '#CCCCCC',
+          minHeight: '56px',
+          backgroundColor: '#1A1A2E',
+          color: '#F5C518',
           fontSize: '20px',
-          fontWeight: 600,
-          border: '2px solid #444444',
+          fontWeight: 700,
+          border: '2px solid #F5C518',
           borderRadius: '10px',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: '10px',
-          transition: 'border-color 0.15s, color 0.15s',
+          gap: '8px',
+          WebkitTapHighlightColor: 'transparent',
         }}
-        onMouseOver={(e) => {
-          e.currentTarget.style.borderColor = '#CCCCCC'
-          e.currentTarget.style.color = '#FFFFFF'
-        }}
-        onMouseOut={(e) => {
-          e.currentTarget.style.borderColor = '#444444'
-          e.currentTarget.style.color = '#CCCCCC'
-        }}
-        aria-label="Make another podcast"
       >
-        🔁 Make Another Podcast
+        🔁 MAKE ANOTHER ONE
       </button>
     </div>
   )

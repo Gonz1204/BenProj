@@ -9,32 +9,24 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: '#0A0A0A',
-        card: '#1A1A2E',
-        accent: '#F5C518',
-        cyan: '#00D4FF',
-        success: '#00FF88',
-        error: '#FF4444',
-        bodyText: '#FFFFFF',
-        secondary: '#CCCCCC',
-        disabled: '#444444',
+        'bg-main': '#0A0A0A',
+        'bg-card': '#1A1A2E',
+        'accent': '#F5C518',
+        'success': '#00FF88',
+        'error': '#FF4444',
+        'status': '#00D4FF',
+        'text-primary': '#FFFFFF',
+        'text-secondary': '#CCCCCC',
+        'disabled': '#444444',
       },
-      fontSize: {
-        'body': '18px',
-        'btn': '22px',
-        'h1': '32px',
-        'h2': '24px',
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
       },
-      minHeight: {
-        'btn': '60px',
-        'upload': '200px',
-      },
-      borderWidth: {
-        '3': '3px',
+      lineHeight: {
+        'relaxed': '1.6',
       },
     },
   },
   plugins: [],
 }
-
 export default config
