@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { CURATED_VOICES } from '@/lib/elevenlabs'
 
 interface VoicePickerProps {
@@ -17,35 +17,41 @@ export default function VoicePicker({
   onHost2Change,
 }: VoicePickerProps) {
   const [previewingVoice, setPreviewingVoice] = useState<string | null>(null)
-  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const stopCurrentPreview = useCallback(() => {
-    if (currentAudio) {
-      currentAudio.pause()
-      currentAudio.src = ''
-      setCurrentAudio(null)
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ''
+      audioRef.current = null
     }
     setPreviewingVoice(null)
-  }, [currentAudio])
+  }, [])
 
   const handlePreview = useCallback(
     async (e: React.MouseEvent, voiceId: string, previewText: string) => {
       e.stopPropagation()
+      setPreviewError(null)
 
-      // Stop current preview
-      if (currentAudio) {
-        currentAudio.pause()
-        currentAudio.src = ''
-        setCurrentAudio(null)
+      // Stop any current preview
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.src = ''
+        audioRef.current = null
       }
 
-      // Toggle off if same voice
+      // Toggle off if same voice clicked again
       if (previewingVoice === voiceId) {
         setPreviewingVoice(null)
         return
       }
 
       setPreviewingVoice(voiceId)
+
+      // Create Audio element synchronously within the user gesture — required for Safari/iOS
+      const audio = new Audio()
+      audioRef.current = audio
 
       try {
         const res = await fetch('/api/tts', {
@@ -54,31 +60,37 @@ export default function VoicePicker({
           body: JSON.stringify({ previewText, voiceId }),
         })
 
-        if (!res.ok) throw new Error(`Preview failed: ${res.status}`)
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.error || `Server error ${res.status}`)
+        }
 
         const blob = await res.blob()
         const url = URL.createObjectURL(blob)
-        const audio = new Audio(url)
 
+        audio.src = url
         audio.onended = () => {
           setPreviewingVoice(null)
           URL.revokeObjectURL(url)
-          setCurrentAudio(null)
+          if (audioRef.current === audio) audioRef.current = null
         }
         audio.onerror = () => {
           setPreviewingVoice(null)
+          setPreviewError('Audio failed to play — try again')
           URL.revokeObjectURL(url)
-          setCurrentAudio(null)
+          if (audioRef.current === audio) audioRef.current = null
         }
 
-        setCurrentAudio(audio)
         await audio.play()
       } catch (err) {
-        console.error('Preview error:', err)
+        const message = err instanceof Error ? err.message : 'Preview failed'
+        console.error('Preview error:', message)
+        setPreviewError(message)
         setPreviewingVoice(null)
+        if (audioRef.current === audio) audioRef.current = null
       }
     },
-    [previewingVoice, currentAudio]
+    [previewingVoice]
   )
 
   const sameVoiceError = host1Voice && host2Voice && host1Voice === host2Voice
@@ -175,7 +187,7 @@ export default function VoicePicker({
                     ? `Stop preview of ${voice.name}`
                     : `Preview ${voice.name} voice`
                 }
-                disabled={isPreviewing && previewingVoice !== voice.voice_id}
+                disabled={!!previewingVoice && !isPreviewing}
                 onClick={(e) => handlePreview(e, voice.voice_id, voice.preview_text)}
                 style={{
                   minHeight: '60px',
@@ -214,6 +226,24 @@ export default function VoicePicker({
     <div>
       {renderHostSection(1, host1Voice, onHost1Change)}
       {renderHostSection(2, host2Voice, onHost2Change)}
+
+      {previewError && (
+        <div
+          role="alert"
+          style={{
+            backgroundColor: '#1A1A2E',
+            border: '2px solid #FF4444',
+            borderRadius: '10px',
+            padding: '16px 20px',
+            color: '#FF4444',
+            fontSize: '18px',
+            fontWeight: 700,
+            marginBottom: '12px',
+          }}
+        >
+          ❌ Preview error: {previewError}
+        </div>
+      )}
 
       {sameVoiceError && (
         <div
