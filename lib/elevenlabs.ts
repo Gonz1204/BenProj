@@ -28,13 +28,13 @@ export const CURATED_VOICES: ElevenLabsVoice[] = [
     preview_text: 'OH WE ARE NOT DOING THIS RIGHT NOW! This is INSANE, this is HISTORIC, I have never seen anything like this in my entire career!',
   },
   {
-    voice_id: 'yoZ06aMxZJJ28mfd3POQ',
+    voice_id: 'N2lVS1w4EtoT3dr4eOWO',
     name: 'The Contrarian',
     description: 'Gravelly, skeptical — always has a counter',
     preview_text: 'I\'m gonna stop you right there because I\'ve heard this argument before and it doesn\'t hold up. Let me explain why you\'re wrong.',
   },
   {
-    voice_id: 'TxGEqnHWrfWFTfGW9XjX',
+    voice_id: 'pqHfZKP75CvOlQylNhV4',
     name: 'The Veteran',
     description: 'Authoritative, wise — drops knowledge like he\'s seen it all',
     preview_text: 'I\'ve been in this game for thirty years and I can tell you with complete certainty that what happened here changed everything that came after it.',
